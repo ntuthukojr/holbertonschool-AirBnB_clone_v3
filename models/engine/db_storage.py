@@ -1,86 +1,120 @@
 #!/usr/bin/python3
-"""Database Storage"""
-
-
-from models.user import User
-from models.base_model import BaseModel
+'''
+    Declaration for database storage
+'''
+import models
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, String, create_engine
 from models.base_model import Base
-import json
+from models.user import User
+from models.place import Place
 from models.state import State
 from models.city import City
 from models.amenity import Amenity
-from models.place import Place
 from models.review import Review
-import sqlalchemy
-from os import getenv
-from sqlalchemy.orm import sessionmaker, scoped_session
-from sqlalchemy import create_engine
-
-model = {"User": User, "State": State,
-         "City": City, "Amenity": Amenity,
-         "Place": Place, "Review": Review}
+from sqlalchemy.orm import sessionmaker, scoped_session, exc
+import os
 
 
 class DBStorage():
-    """Database"""
+    '''
+    Database storage class
+    '''
     __engine = None
     __session = None
 
     def __init__(self):
-        """inisialization"""
-        self.__engine = create_engine("mysql+mysqldb://{}:{}@{}/{}"
-                                      .format(getenv('HBNB_MYSQL_USER'),
-                                              getenv('HBNB_MYSQL_PWD'),
-                                              getenv('HBNB_MYSQL_HOST'),
-                                              getenv('HBNB_MYSQL_DB')),
-                                      pool_pre_ping=True)
-        if getenv('HBNB_ENV') == "test":
-            Base.meta.drop_all(bind=self.__engine)
+        '''
+        Creates engine connection
+        '''
+        username = os.getenv('HBNB_MYSQL_USER', default=None)
+        password = os.getenv('HBNB_MYSQL_PWD', default=None)
+        localhost = os.getenv('HBNB_MYSQL_HOST', default=None)
+        db_name = os.getenv('HBNB_MYSQL_DB', default=None)
+        connection = 'mysql+mysqldb://{}:{}@localhost/{}'
+        self.__engine = create_engine(connection.format(
+            username, password, db_name), pool_pre_ping=True)
+        if os.getenv('HBNB_ENV') == 'test':
+            Base.metadata.drop_all(self.__engine)
 
     def all(self, cls=None):
-        """all func"""
-        objs = {}
-        for cclass in model:
-            if model[cclass] == cls or cls is None:
-                for key in self.__session.query(model[cclass]).all():
-                    objs[type(key).__name__+'.'+key.id] = key
-        return objs
+        '''
+        Queries current database session based on class.
+        Returns a dictionary representation of the query.
+        '''
+        result = []
+        new_dict = {}
+        if cls is not None:
+            result = self.__session.query(eval(cls)).all()
+            for item in result:
+                key = item.__class__.__name__ + '.' + item.id
+                new_dict[key] = item
+        else:
+            classes = ['User', 'State', 'City', 'Amenity', 'Place', 'Review']
+            for class_name in classes:
+                try:
+                    result = (self.__session.query(eval(class_name)).all())
+                    for item in result:
+                        key = item.__class__.__name__ + '.' + item.id
+                        new_dict[key] = item
+                except Exception:
+                    continue
+        return new_dict
 
     def new(self, obj):
-        """new"""
+        '''
+        Adds the object to the current database session
+        '''
         self.__session.add(obj)
 
     def save(self):
-        """save"""
+        '''
+        Commits all changes of the current database session
+        '''
         self.__session.commit()
 
     def delete(self, obj=None):
-        """delete"""
+        '''
+        Deletes from the current database session obj if not None
+        '''
         if obj is not None:
             self.__session.delete(obj)
+            self.save()
 
     def reload(self):
-        """reload"""
+        '''
+        Creates all tables in the database.
+        '''
         Base.metadata.create_all(self.__engine)
-        ssession = sessionmaker(bind=self.__engine, expire_on_commit=False)
-        Session = scoped_session(ssession)
-        self.__session = Session
-
-    def get(self, cls, id):
-        """get"""
-        if id is None or cls is None:
-            return None
-        try:
-            return self.__session.query(cls).get(id)
-        except:
-            return None
-
-    def count(self, cls=None):
-        """counter"""
-        if cls is None:
-            return len(self.all())
-        return len(self.all(cls))
+        session_factory = sessionmaker(
+            bind=self.__engine, expire_on_commit=False)
+        Session = scoped_session(session_factory)
+        self.__session = Session()
 
     def close(self):
-        """close"""
+        '''
+        Calls remove method on the private session attribute or
+        close method on the class Session
+        '''
         self.__session.close()
+
+    def get(self, cls, id):
+        ''' Gets all the objects based on the class name and its id '''
+
+        all_obj = self.all()
+        search_str = "{}.{}".format(str(cls), str(id))
+        result = all_obj.get(search_str)
+        return result
+
+    def count(self, cls=None):
+        ''' Gives the number of objects in
+            storage matching the given cls name. I cls is None count all objs
+        '''
+
+        if cls is None:
+            param = None
+        else:
+            param = str(cls)
+
+        all_obj = self.all(param)
+        return (len(all_obj))

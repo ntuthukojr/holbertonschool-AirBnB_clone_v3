@@ -1,35 +1,39 @@
 #!/usr/bin/python3
-"""api config"""
-
+'''
+   contain teardown method
+'''
+from flask import Flask, jsonify
 from models import storage
 from api.v1.views import app_views
-from flask import Flask, jsonify
 from flask_cors import CORS
-from os import getenv
+import os
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "0.0.0.0"}})
+CORS(app, resources={r"/*": {"origins": ["0.0.0.0"]}})
+
 app.register_blueprint(app_views)
 
 
+@app.errorhandler(404)
+def handle_404(error):
+    ''' custom JSON 404 error'''
+    return (jsonify({"error": "Not found"}), 404)
+
+
 @app.teardown_appcontext
-def teardown(self):
-    """close"""
+def teardown(exception):
+    '''
+        Teardown method for storage session
+    '''
     storage.close()
 
 
-@app.errorhandler(404)
-def error(e):
-    """404"""
-    return jsonify({"error": "Not found"}), 404
-
-
 if __name__ == "__main__":
-    host = "0.0.0.0"
-    port = 5000
-    if getenv("HBNB_API_HOST") is not None:
-        host = getenv("HBNB_API_HOST")
-    if getenv("HBNB_API_PORT") is not None:
-        port = getenv("HBNB_API_PORT")
-    app.run(host=host, port=port, threaded=True)
+    app_host = os.getenv('HBNB_API_HOST')
+    app_port = os.getenv('HBNB_API_PORT')
+    if app_host is None:
+        app_host = '0.0.0.0'
+    if app_port is None:
+        app_port = 5000
+    app.run(host=app_host, port=int(app_port))

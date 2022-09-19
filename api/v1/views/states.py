@@ -1,65 +1,70 @@
 #!/usr/bin/python3
-"""states"""
-
+''' blueprint for state '''
 from api.v1.views import app_views
-import json
+from flask import jsonify, abort, request
 from models import storage
-from flask import jsonify, make_response, request, abort
-from models.state import State
+from models import State
 
 
-@app_views.route('/states', methods=['GET'], strict_slashes=False)
-@app_views.route('/states/<state_id>', methods=['GET'], strict_slashes=False)
-def all(state_id=None):
-    """list all states"""
-    if state_id is not None:
-        if not storage.get(State, state_id):
-            abort(404)
-        elem = storage.get(State, state_id).to_dict()
-        return jsonify(elem)
-    else:
-        listobj = []
-        for obj in storage.all(State).values():
-            listobj.append(obj.to_dict())
-        return jsonify(listobj)
+@app_views.route('/states', methods=["GET"], strict_slashes=False)
+@app_views.route('/states/<state_id>', methods=["GET"], strict_slashes=False)
+def state(state_id=None):
+    ''' retrieves a list of all states'''
+    if state_id is None:
+        states = storage.all("State")
+        my_states = [value.to_dict() for key, value in states.items()]
+        return jsonify(my_states)
+
+    my_states = storage.get("State", state_id)
+    if my_states is not None:
+        return jsonify(my_states.to_dict())
+    abort(404)
 
 
-@app_views.route('states/<state_id>', methods=['DELETE'], strict_slashes=False)
-def dell(state_id):
-    """delete"""
-    elem = storage.get(State, state_id)
-    if not elem:
+@app_views.route('/states/<s_id>', methods=["DELETE"], strict_slashes=False)
+def delete_states(s_id):
+    '''Deletes an specific state based on its id'''
+
+    my_state = storage.get("State", s_id)
+    if my_state is None:
         abort(404)
-    storage.delete(elem)
+    storage.delete(my_state)
     storage.save()
-    return make_response(jsonify({}), 200)
+    return (jsonify({}))
 
 
-@app_views.route('/states', methods=['POST'], strict_slashes=False)
-def posting():
-    """post"""
-    req = request.json
-    if not req:
-        abort(400, description="Not a JSON")
-    if 'name' not in req:
-        abort(400, description="Missing name")
-    info = State(**req)
-    info.save()
-    return make_response(jsonify(info.to_dict()), 201)
+@app_views.route('/states', methods=["POST"], strict_slashes=False)
+def post_states():
+
+    content = request.get_json()
+    if content is None:
+        return (jsonify({"error": "Not a JSON"}), 400)
+    name = content.get("name")
+    if name is None:
+        return (jsonify({"error": "Missing name"}), 400)
+
+    new_state = State(**content)
+    new_state.save()
+
+    return (jsonify(new_state.to_dict()), 201)
 
 
-@app_views.route('/states/<state_id>', methods=['PUT'], strict_slashes=False)
-def putting(state_id):
-    """put"""
-    req = request.json
-    if not req:
-        abort(400, description="Not a JSON")
-    if not storage.get(State, state_id):
+@app_views.route('/states/<state_id>', methods=["PUT"], strict_slashes=False)
+def update_states(state_id):
+    '''Updates a state'''
+
+    content = request.get_json()
+    if content is None:
+        return (jsonify({"error": "Not a JSON"}), 400)
+
+    my_state = storage.get("State", state_id)
+    if my_state is None:
         abort(404)
-    badkeys = ['id', 'created_at', 'updated_at']
-    for key, value in req.items():
-        if key not in badkeys:
-            elem = storage.get(State, state_id)
-            setattr(elem, key, value)
-    storage.save()
-    return make_response(jsonify(elem.to_dict()), 200)
+
+    not_allowed = ["id", "created_at", "updated_at"]
+    for key, value in content.items():
+        if key not in not_allowed:
+            setattr(my_state, key, value)
+
+    my_state.save()
+    return jsonify(my_state.to_dict())

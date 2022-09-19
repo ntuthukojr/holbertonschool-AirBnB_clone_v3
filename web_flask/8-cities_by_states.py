@@ -1,27 +1,21 @@
 #!/usr/bin/python3
-"""task 7"""
-
-from flask import Flask
-from flask import render_template
 from models import storage
-from models.state import State
-
+from flask import Flask, render_template
 app = Flask(__name__)
 
 
 @app.teardown_appcontext
-def teardown_app(self):
-    """bye"""
+def close_db(error):
     storage.close()
 
 
-@app.route("/cities_by_states", strict_slashes=False)
+@app.route('/cities_by_states', strict_slashes=False)
 def cities_list():
-    """list cities"""
-    states = storage.all(State).values()
-    states = sorted(statesList, key=lambda k: k.name)
-    return render_template("8-cities_by_states.html", states)
-
+    my_storage = storage.all('State')
+    city_list = []
+    for key, val in my_storage.items():
+        city_list.append(my_storage[key])
+    return render_template('8-cities_by_states.html', city_list=city_list)
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host='0.0.0.0')
